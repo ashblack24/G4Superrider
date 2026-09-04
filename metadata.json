@@ -1,6 +1,6 @@
 {
   "name": "G4Superrider",
-  "description": "G4Superrider web application",
-  "requestFramePermissions": [],
+  "description": "Smart motorcycle delivery navigation, shortcuts, parking, EV charging, and on-foot building guidance for Singapore delivery riders.",
+  "requestFramePermissions": ["geolocation"],
   "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
 }

@@ -1,0 +1,302 @@
+import React, { useEffect, useRef } from 'react';
+import L from 'leaflet';
+import { RouteStop, MotorcycleParking, EVCharger, DeliveryOrder } from '../types';
+import { MOTORBIKE_SHORTCUTS } from '../data/singaporeData';
+
+interface NavigationMapProps {
+  currentLocation: [number, number];
+  stops: RouteStop[];
+  activeStopIndex: number;
+  showParking: boolean;
+  showEV: boolean;
+  showShortcutsOnly: boolean;
+  parkingSpots: MotorcycleParking[];
+  evChargers: EVCharger[];
+  orders: DeliveryOrder[];
+  onSelectParking: (spot: MotorcycleParking) => void;
+  onSelectEV: (charger: EVCharger) => void;
+  onSelectStop: (stop: RouteStop, index: number) => void;
+  onOpenStreetView: (stop: RouteStop) => void;
+}
+
+export const NavigationMap: React.FC<NavigationMapProps> = ({
+  currentLocation,
+  stops,
+  activeStopIndex,
+  showParking,
+  showEV,
+  showShortcutsOnly,
+  parkingSpots,
+  evChargers,
+  orders,
+  onSelectParking,
+  onSelectEV,
+  onSelectStop,
+  onOpenStreetView,
+}) => {
+  const mapContainerRef = useRef<HTMLDivElement>(null);
+  const mapInstanceRef = useRef<L.Map | null>(null);
+  const layerGroupRef = useRef<L.LayerGroup | null>(null);
+
+  // Initialize Map
+  useEffect(() => {
+    if (!mapContainerRef.current || mapInstanceRef.current) return;
+
+    // Dark sleek CartoDB / OSM tiles tailored for high contrast
+    const map = L.map(mapContainerRef.current, {
+      center: currentLocation,
+      zoom: 14,
+      zoomControl: false,
+      attributionControl: false,
+    });
+
+    L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
+      maxZoom: 19,
+      subdomains: 'abcd',
+    }).addTo(map);
+
+    // Reposition zoom controls to bottom-right for clean mobile thumb access
+    L.control.zoom({ position: 'bottomright' }).addTo(map);
+
+    const layerGroup = L.layerGroup().addTo(map);
+    mapInstanceRef.current = map;
+    layerGroupRef.current = layerGroup;
+
+    return () => {
+      map.remove();
+      mapInstanceRef.current = null;
+    };
+  }, []);
+
+  // Render Dynamic Layers & Routes
+  useEffect(() => {
+    const map = mapInstanceRef.current;
+    const layerGroup = layerGroupRef.current;
+    if (!map || !layerGroup) return;
+
+    layerGroup.clearLayers();
+
+    // 1. Current Rider Marker (Pulsing Amber Dot)
+    const riderIcon = L.divIcon({
+      className: 'rider-marker',
+      html: `
+        <div class="relative flex items-center justify-center w-8 h-8">
+          <div class="absolute w-8 h-8 rounded-full bg-[#F39444]/30 animate-ping"></div>
+          <div class="relative w-4 h-4 rounded-full bg-[#F39444] border-2 border-[#040505] shadow-[0_0_12px_#F39444]"></div>
+          <div class="absolute -bottom-5 bg-[#040505]/90 text-[#F8F8F8] text-[10px] font-bold px-1.5 py-0.5 rounded border border-zinc-700/80 shadow">
+            YOU
+          </div>
+        </div>
+      `,
+      iconSize: [32, 32],
+      iconAnchor: [16, 16],
+    });
+
+    L.marker(currentLocation, { icon: riderIcon, zIndexOffset: 1000 })
+      .addTo(layerGroup)
+      .bindPopup(`
+        <div class="text-xs p-1 text-zinc-100">
+          <div class="font-bold text-[#F39444]">Rider Position (Online)</div>
+          <div class="text-zinc-400">Singapore CBD • GPS Locked</div>
+        </div>
+      `);
+
+    // 2. Draw Motorbike Shortcuts & Paths
+    MOTORBIKE_SHORTCUTS.forEach((sc, idx) => {
+      // Standard car path (dimmed dashed gray line showing congested regular road)
+      if (!showShortcutsOnly) {
+        L.polyline(sc.carStandardPath, {
+          color: '#52525b',
+          weight: 3,
+          dashArray: '6, 8',
+          opacity: 0.6,
+        }).addTo(layerGroup);
+      }
+
+      // Motorbike Shortcut Path (Sleek high-contrast Amber #F39444 line)
+      const shortcutPolyline = L.polyline(sc.waypointCoordinates, {
+        color: '#F39444',
+        weight: 5,
+        opacity: 0.95,
+      }).addTo(layerGroup);
+
+      // Mid-point Shortcut Callout Badge
+      const midCoord = sc.waypointCoordinates[Math.floor(sc.waypointCoordinates.length / 2)];
+      const shortcutBadgeIcon = L.divIcon({
+        className: 'shortcut-badge-marker',
+        html: `
+          <div class="bg-[#F39444] text-[#040505] font-extrabold text-[10px] px-2 py-0.5 rounded-full shadow-lg flex items-center gap-1 border border-black/20 whitespace-nowrap -translate-x-1/2 -translate-y-1/2">
+            <span>⚡ -${sc.timeSavedMins}m BIKE SHORTCUT</span>
+          </div>
+        `,
+        iconSize: [120, 24],
+        iconAnchor: [60, 12],
+      });
+
+      L.marker(midCoord, { icon: shortcutBadgeIcon })
+        .addTo(layerGroup)
+        .bindPopup(`
+          <div class="text-xs space-y-1.5 p-1 text-zinc-200">
+            <div class="font-bold text-[#F39444] text-sm">${sc.name}</div>
+            <p class="text-zinc-300 text-[11px] leading-tight">${sc.description}</p>
+            <div class="flex items-center gap-2 text-[10px] font-mono text-emerald-400 font-bold">
+              <span>Save ${sc.timeSavedMins} min</span>
+              <span>•</span>
+              <span>${sc.erpAvoidance}</span>
+            </div>
+          </div>
+        `);
+    });
+
+    // 3. Stop Markers (Pickups & Dropoffs)
+    stops.forEach((stop, index) => {
+      const isCurrentActive = index === activeStopIndex;
+      const isPickup = stop.type === 'pickup';
+
+      const stopIcon = L.divIcon({
+        className: 'custom-stop-marker',
+        html: `
+          <div class="relative flex flex-col items-center -translate-x-1/2 -translate-y-full cursor-pointer">
+            <div class="px-2 py-0.5 rounded-md text-[10px] font-bold shadow-xl border flex items-center gap-1 ${
+              isCurrentActive 
+                ? 'bg-[#F39444] text-[#040505] border-[#F39444] shadow-[0_0_12px_#F39444]' 
+                : isPickup 
+                  ? 'bg-emerald-500 text-[#040505] border-emerald-400' 
+                  : 'bg-zinc-800 text-white border-zinc-700'
+            }">
+              <span>${index + 1}.</span>
+              <span>${isPickup ? 'PICKUP' : 'DELIVER'}</span>
+            </div>
+            <div class="w-3.5 h-3.5 rotate-45 -mt-1.5 ${
+              isCurrentActive ? 'bg-[#F39444]' : isPickup ? 'bg-emerald-500' : 'bg-zinc-800'
+            } border-r border-b border-black/30"></div>
+          </div>
+        `,
+        iconSize: [70, 40],
+        iconAnchor: [35, 36],
+      });
+
+      const marker = L.marker(stop.coords, { icon: stopIcon, zIndexOffset: isCurrentActive ? 900 : 500 })
+        .addTo(layerGroup)
+        .on('click', () => onSelectStop(stop, index));
+
+      marker.bindPopup(`
+        <div class="text-xs p-1 text-zinc-100 space-y-1.5 min-w-[200px]">
+          <div class="flex items-center justify-between">
+            <span class="font-bold ${isPickup ? 'text-emerald-400' : 'text-[#F39444]'}">
+              Stop ${index + 1}: ${isPickup ? 'Pickup Food' : 'Customer Delivery'}
+            </span>
+            <span class="text-[10px] px-1.5 py-0.5 rounded bg-zinc-800 border border-zinc-700 font-mono">
+              ${stop.estimatedArrival}
+            </span>
+          </div>
+          <div class="font-semibold text-white text-sm">${stop.title}</div>
+          <div class="text-zinc-400 text-[11px] leading-tight">${stop.address}</div>
+          ${stop.notes ? `<div class="p-1.5 bg-zinc-900 rounded border border-zinc-800 text-[11px] text-amber-300">⚠️ ${stop.notes}</div>` : ''}
+          ${!isPickup ? `
+            <button id="view-building-guide-popup-btn" class="w-full mt-2 py-1.5 px-2.5 rounded-lg bg-[#F39444] hover:bg-[#F39444]/90 text-[#040505] font-bold text-xs flex items-center justify-center gap-1.5">
+              <span>🚶 Foot 3D Guidance</span>
+            </button>
+          ` : ''}
+        </div>
+      `);
+    });
+
+    // 4. Motorcycle Parking Spots (Free / Grace Period / Paid)
+    if (showParking) {
+      parkingSpots.forEach((pk) => {
+        const isFree = pk.type === 'free' || pk.gracePeriodMins > 0;
+        const pkIcon = L.divIcon({
+          className: 'custom-parking-marker',
+          html: `
+            <div class="relative flex items-center justify-center w-7 h-7 rounded-xl ${
+              isFree ? 'bg-emerald-950/90 border border-emerald-500 text-emerald-400' : 'bg-zinc-900/90 border border-zinc-600 text-zinc-300'
+            } shadow-lg text-xs font-black cursor-pointer hover:scale-110 transition-transform">
+              <span class="font-mono">P</span>
+              <span class="absolute -top-1.5 -right-1.5 bg-emerald-500 text-black text-[9px] font-bold w-4 h-4 rounded-full flex items-center justify-center">
+                ${pk.availableLots}
+              </span>
+            </div>
+          `,
+          iconSize: [28, 28],
+          iconAnchor: [14, 14],
+        });
+
+        L.marker(pk.coords, { icon: pkIcon })
+          .addTo(layerGroup)
+          .on('click', () => onSelectParking(pk))
+          .bindPopup(`
+            <div class="text-xs p-1 text-zinc-100 space-y-1">
+              <div class="flex items-center justify-between">
+                <span class="font-bold text-emerald-400">Motorcycle Parking</span>
+                <span class="text-[10px] px-1.5 py-0.5 rounded bg-emerald-950 border border-emerald-700 text-emerald-300 font-bold">
+                  ${pk.gracePeriodMins}m Free Grace
+                </span>
+              </div>
+              <div class="font-semibold text-white">${pk.name}</div>
+              <div class="text-zinc-400 text-[11px]">${pk.address}</div>
+              <div class="text-xs text-amber-300 font-medium">Rate: ${pk.costPerHour}</div>
+              <div class="text-[11px] text-zinc-300 flex items-center gap-1 mt-1">
+                <span>Available Lots:</span>
+                <span class="font-bold text-emerald-400 font-mono">${pk.availableLots} / ${pk.totalLots}</span>
+              </div>
+              ${pk.restrictionsWarning ? `<div class="text-[10px] text-rose-300 bg-rose-950/40 p-1 rounded border border-rose-900/60 mt-1">⚠️ ${pk.restrictionsWarning}</div>` : ''}
+            </div>
+          `);
+      });
+    }
+
+    // 5. EV Charging Points
+    if (showEV) {
+      evChargers.forEach((ev) => {
+        const evIcon = L.divIcon({
+          className: 'custom-ev-marker',
+          html: `
+            <div class="relative flex items-center justify-center w-7 h-7 rounded-xl bg-cyan-950/90 border border-cyan-400 text-cyan-300 shadow-lg text-xs font-black cursor-pointer hover:scale-110 transition-transform">
+              <span>⚡</span>
+              <span class="absolute -top-1.5 -right-1.5 bg-cyan-400 text-black text-[9px] font-bold w-4 h-4 rounded-full flex items-center justify-center">
+                ${ev.availablePlugs}
+              </span>
+            </div>
+          `,
+          iconSize: [28, 28],
+          iconAnchor: [14, 14],
+        });
+
+        L.marker(ev.coords, { icon: evIcon })
+          .addTo(layerGroup)
+          .on('click', () => onSelectEV(ev))
+          .bindPopup(`
+            <div class="text-xs p-1 text-zinc-100 space-y-1">
+              <div class="flex items-center justify-between">
+                <span class="font-bold text-cyan-400">EV Station • ${ev.operator}</span>
+                <span class="text-[10px] px-1.5 py-0.5 rounded bg-cyan-950 border border-cyan-700 text-cyan-300 font-bold">
+                  ${ev.powerOutput}
+                </span>
+              </div>
+              <div class="font-semibold text-white">${ev.name}</div>
+              <div class="text-zinc-400 text-[11px]">${ev.address}</div>
+              <div class="text-xs text-zinc-200">Rate: ${ev.ratePerKwh}</div>
+              <div class="text-[11px] text-zinc-300 flex items-center gap-1 mt-1">
+                <span>Plugs:</span>
+                <span class="font-bold text-cyan-400 font-mono">${ev.availablePlugs} / ${ev.totalPlugs} Available (${ev.connectorType})</span>
+              </div>
+            </div>
+          `);
+      });
+    }
+
+    // Fit bounds smoothly to show the active delivery corridor
+    if (stops.length > 0) {
+      const allPoints = [currentLocation, ...stops.map((s) => s.coords)];
+      const bounds = L.latLngBounds(allPoints);
+      map.fitBounds(bounds, { padding: [60, 60], maxZoom: 15 });
+    }
+  }, [currentLocation, stops, activeStopIndex, showParking, showEV, showShortcutsOnly, parkingSpots, evChargers]);
+
+  return (
+    <div id="live-map-container" className="relative w-full h-full min-h-[480px]">
+      <div ref={mapContainerRef} className="w-full h-full z-0" />
+    </div>
+  );
+};
