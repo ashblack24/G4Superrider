@@ -1,0 +1,6 @@
+{
+  "name": "G4Superrider",
+  "description": "G4Superrider web application",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
