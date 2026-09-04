@@ -102,3 +102,44 @@ export interface LtaTrafficIncident {
   coords: [number, number];
 }
 
+export interface StoreUnit {
+  id: string;
+  name: string;
+  category: 'luxury' | 'food' | 'fashion' | 'electronics' | 'services' | 'customer';
+  unitCode: string;
+  x: number; // percentage (0-100) or svg units
+  y: number;
+  width?: number;
+  height?: number;
+  isDestination?: boolean;
+  orderInfo?: string;
+}
+
+export interface AccessNode {
+  id: string;
+  type: 'escalator' | 'elevator' | 'stairs' | 'entrance' | 'parking';
+  label: string;
+  x: number;
+  y: number;
+  targetLevel?: string;
+  actionText?: string;
+  isCourierApproved?: boolean;
+}
+
+export interface FloorLevelPlan {
+  level: string; // "L7", "L6", "L5", "L4", "L3", "L2M", "L2", "L1", "B1"
+  name: string;
+  description: string;
+  stores: StoreUnit[];
+  accessNodes: AccessNode[];
+  walkingPath: [number, number][];
+  guidanceCallout?: {
+    nodeId: string;
+    text: string;
+    targetLevel: string;
+    icon: 'escalator' | 'elevator' | 'pickup' | 'ramp';
+    x: number;
+    y: number;
+  };
+}
+

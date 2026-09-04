@@ -21,6 +21,7 @@ import {
   XCircle,
   Eye
 } from 'lucide-react';
+import { SimplifiedFloorplanMap } from './SimplifiedFloorplanMap';
 
 interface StreetViewFootGuidanceProps {
   guide: FootDeliveryGuide;
@@ -38,7 +39,7 @@ export const StreetViewFootGuidance: React.FC<StreetViewFootGuidanceProps> = ({
   onCompleteDelivery,
 }) => {
   const [currentStep, setCurrentStep] = useState(0);
-  const [viewAngle, setViewAngle] = useState<'3d_drone' | 'street_pano' | 'isometric_building'>('3d_drone');
+  const [viewAngle, setViewAngle] = useState<'simplified_floorplan' | '3d_drone' | 'street_pano' | 'isometric_building'>('simplified_floorplan');
   const [checklist, setChecklist] = useState({
     parkedInLegalBay: false,
     avoidedFireExits: true,
@@ -141,11 +142,24 @@ export const StreetViewFootGuidance: React.FC<StreetViewFootGuidanceProps> = ({
         </div>
 
         {/* 3D Visual Perspective Canvas / Street View Emulation */}
-        <div id="interactive-3d-stage" className="relative h-64 md:h-80 rounded-2xl overflow-hidden border border-zinc-800 bg-gradient-to-b from-zinc-900 to-black shadow-2xl flex flex-col justify-between p-4">
+        <div id="interactive-3d-stage" className={`relative rounded-2xl overflow-hidden border border-zinc-800 bg-gradient-to-b from-zinc-900 to-black shadow-2xl flex flex-col justify-between ${
+          viewAngle === 'simplified_floorplan' ? 'h-[520px] p-0' : 'h-64 md:h-80 p-4'
+        }`}>
           
           {/* Top Stage Controls */}
-          <div className="flex items-center justify-between z-10">
-            <div className="flex items-center gap-1.5 bg-black/60 backdrop-blur-md p-1 rounded-xl border border-zinc-800">
+          <div className="flex items-center justify-between z-20 p-3 bg-zinc-950/80 backdrop-blur-md border-b border-zinc-800/80">
+            <div className="flex items-center gap-1.5 overflow-x-auto scrollbar-none">
+              <button
+                onClick={() => setViewAngle('simplified_floorplan')}
+                className={`px-3 py-1.5 text-xs font-bold rounded-xl transition-all flex items-center gap-1.5 ${
+                  viewAngle === 'simplified_floorplan' 
+                    ? 'bg-emerald-500 text-slate-950 shadow-md font-black' 
+                    : 'text-emerald-400 hover:text-white bg-emerald-950/40 border border-emerald-800/40'
+                }`}
+              >
+                <span>🏢</span>
+                <span>Simplified Floorplan</span>
+              </button>
               <button
                 onClick={() => setViewAngle('3d_drone')}
                 className={`px-2.5 py-1 text-xs font-semibold rounded-lg transition-colors ${
@@ -172,94 +186,85 @@ export const StreetViewFootGuidance: React.FC<StreetViewFootGuidanceProps> = ({
               </button>
             </div>
 
-            <span className="text-[11px] font-mono bg-black/70 px-2 py-1 rounded-md text-[#F39444] border border-[#F39444]/30 flex items-center gap-1">
+            <span className="hidden sm:flex text-[11px] font-mono bg-black/70 px-2 py-1 rounded-md text-[#F39444] border border-[#F39444]/30 items-center gap-1">
               <Eye className="w-3 h-3" />
-              <span>3D Pedestrian Perspective</span>
+              <span>{viewAngle === 'simplified_floorplan' ? 'Indoor Mall Floorplan' : '3D Perspective'}</span>
             </span>
           </div>
 
-          {/* SVG 3D Isometric / Street Perspective Graphics */}
-          <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
-            {viewAngle === '3d_drone' && (
-              <svg className="w-full h-full opacity-80" viewBox="0 0 600 300" preserveAspectRatio="xMidYMid slice">
-                {/* Simulated 3D Building Exterior & Pedestrian Ramp */}
-                <defs>
-                  <linearGradient id="wallGrad" x1="0" y1="0" x2="1" y2="1">
-                    <stop offset="0%" stopColor="#1e293b" />
-                    <stop offset="100%" stopColor="#0f172a" />
-                  </linearGradient>
-                  <linearGradient id="rampGrad" x1="0" y1="0" x2="1" y2="0">
-                    <stop offset="0%" stopColor="#10b981" stopOpacity="0.8" />
-                    <stop offset="100%" stopColor="#059669" stopOpacity="0.4" />
-                  </linearGradient>
-                </defs>
-                {/* Ground grid */}
-                <path d="M0 240 L300 160 L600 240 L300 290 Z" fill="#090d16" stroke="#1e293b" strokeWidth="1" />
-                {/* Building Tower Block */}
-                <polygon points="180,180 180,40 320,10 320,150" fill="url(#wallGrad)" stroke="#334155" />
-                <polygon points="320,10 420,50 420,180 320,150" fill="#0b0f19" stroke="#334155" />
-                {/* Entrance Canopy */}
-                <polygon points="190,170 310,140 310,150 190,180" fill="#F39444" opacity="0.9" />
-                {/* Designated Walking Path with Green Ramp */}
-                <path d="M 60,260 Q 180,240 250,180" fill="none" stroke="#10b981" strokeWidth="6" strokeLinecap="round" strokeDasharray="8 6" />
-                {/* Forbidden Red Zone marker on Fire Stairwell */}
-                <polygon points="380,170 410,180 410,130 380,120" fill="#ef4444" opacity="0.2" stroke="#ef4444" strokeWidth="2" strokeDasharray="4 4" />
-                <text x="395" y="145" fill="#ef4444" fontSize="10" fontWeight="bold" textAnchor="middle">FIRE EXIT (NO ENTRY)</text>
-                {/* Green Courier Ramp Marker */}
-                <circle cx="250" cy="180" r="10" fill="#10b981" />
-                <text x="250" y="205" fill="#10b981" fontSize="11" fontWeight="bold" textAnchor="middle">Courier Ramp Entrance</text>
-                {/* Rider Motorcycle Staging Lot */}
-                <rect x="40" y="245" width="40" height="25" rx="4" fill="#047857" stroke="#34d399" strokeWidth="1.5" />
-                <text x="60" y="261" fill="#ffffff" fontSize="9" fontWeight="bold" textAnchor="middle">MOTO LOT</text>
-              </svg>
-            )}
+          {/* Interactive Views */}
+          {viewAngle === 'simplified_floorplan' ? (
+            <div className="flex-1 w-full h-full relative overflow-hidden">
+              <SimplifiedFloorplanMap
+                initialLevel="L4"
+                targetLevel="L5"
+                buildingName={guide.buildingName}
+                orderNumber={stop.orderId.replace('ord-', 'GF-')}
+              />
+            </div>
+          ) : (
+            <div className="relative flex-1 flex items-center justify-center p-4">
+              {viewAngle === '3d_drone' && (
+                <svg className="w-full h-full opacity-80" viewBox="0 0 600 300" preserveAspectRatio="xMidYMid slice">
+                  <defs>
+                    <linearGradient id="wallGrad" x1="0" y1="0" x2="1" y2="1">
+                      <stop offset="0%" stopColor="#1e293b" />
+                      <stop offset="100%" stopColor="#0f172a" />
+                    </linearGradient>
+                  </defs>
+                  <polygon points="180,180 180,40 320,10 320,150" fill="url(#wallGrad)" stroke="#334155" />
+                  <polygon points="320,10 420,50 420,180 320,150" fill="#0b0f19" stroke="#334155" />
+                  <polygon points="190,170 310,140 310,150 190,180" fill="#F39444" opacity="0.9" />
+                  <path d="M 60,260 Q 180,240 250,180" fill="none" stroke="#10b981" strokeWidth="6" strokeLinecap="round" strokeDasharray="8 6" />
+                  <circle cx="250" cy="180" r="10" fill="#10b981" />
+                  <text x="250" y="205" fill="#10b981" fontSize="11" fontWeight="bold" textAnchor="middle">Courier Ramp Entrance</text>
+                  <rect x="40" y="245" width="40" height="25" rx="4" fill="#047857" stroke="#34d399" strokeWidth="1.5" />
+                  <text x="60" y="261" fill="#ffffff" fontSize="9" fontWeight="bold" textAnchor="middle">MOTO LOT</text>
+                </svg>
+              )}
 
-            {viewAngle === 'isometric_building' && (
-              <svg className="w-full h-full opacity-80" viewBox="0 0 600 300" preserveAspectRatio="xMidYMid slice">
-                {/* Lift Lobby Core & Trolley Way */}
-                <rect x="120" y="50" width="360" height="190" rx="16" fill="#111827" stroke="#374151" strokeWidth="2" />
-                {/* Lift Bank B */}
-                <rect x="160" y="80" width="100" height="110" rx="8" fill="#1f2937" stroke="#10b981" strokeWidth="2" />
-                <text x="210" y="105" fill="#10b981" fontSize="12" fontWeight="bold" textAnchor="middle">CARGO LIFT B</text>
-                <text x="210" y="125" fill="#9ca3af" fontSize="9" textAnchor="middle">Trolley Approved</text>
-                <text x="210" y="140" fill="#9ca3af" fontSize="9" textAnchor="middle">Floors 1 - 35</text>
-                {/* Security Counter */}
-                <rect x="330" y="80" width="110" height="60" rx="8" fill="#1f2937" stroke="#F39444" strokeWidth="1.5" />
-                <text x="385" y="105" fill="#F39444" fontSize="11" fontWeight="bold" textAnchor="middle">SECURITY DESK</text>
-                <text x="385" y="122" fill="#d1d5db" fontSize="9" textAnchor="middle">Badge Check-in</text>
-                {/* Step-Free Ramp Arrow */}
-                <path d="M 385,210 L 385,155 L 265,155 L 265,135" fill="none" stroke="#34d399" strokeWidth="5" strokeLinecap="round" strokeDasharray="6 4" />
-                <text x="385" y="230" fill="#34d399" fontSize="11" fontWeight="bold" textAnchor="middle">Step-Free Ramp Route</text>
-              </svg>
-            )}
+              {viewAngle === 'isometric_building' && (
+                <svg className="w-full h-full opacity-80" viewBox="0 0 600 300" preserveAspectRatio="xMidYMid slice">
+                  <rect x="120" y="50" width="360" height="190" rx="16" fill="#111827" stroke="#374151" strokeWidth="2" />
+                  <rect x="160" y="80" width="100" height="110" rx="8" fill="#1f2937" stroke="#10b981" strokeWidth="2" />
+                  <text x="210" y="105" fill="#10b981" fontSize="12" fontWeight="bold" textAnchor="middle">CARGO LIFT B</text>
+                  <text x="210" y="125" fill="#9ca3af" fontSize="9" textAnchor="middle">Trolley Approved</text>
+                  <rect x="330" y="80" width="110" height="60" rx="8" fill="#1f2937" stroke="#F39444" strokeWidth="1.5" />
+                  <text x="385" y="105" fill="#F39444" fontSize="11" fontWeight="bold" textAnchor="middle">SECURITY DESK</text>
+                  <path d="M 385,210 L 385,155 L 265,155 L 265,135" fill="none" stroke="#34d399" strokeWidth="5" strokeLinecap="round" strokeDasharray="6 4" />
+                </svg>
+              )}
 
-            {viewAngle === 'street_pano' && (
-              <div className="text-center p-6 bg-black/70 backdrop-blur-md rounded-2xl border border-zinc-800 max-w-sm">
-                <Building2 className="w-10 h-10 text-[#F39444] mx-auto mb-2" />
-                <h4 className="font-bold text-white text-sm">Real-World Google Street View</h4>
-                <p className="text-zinc-400 text-xs mt-1 mb-3">
-                  Delivering to {guide.buildingName} at ({lat.toFixed(4)}, {lng.toFixed(4)}).
-                </p>
-                <a
-                  href={googleDirectionsWalkUrl}
-                  target="_blank"
-                  rel="noreferrer noopener"
-                  className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-[#F39444] text-[#040505] text-xs font-bold"
-                >
-                  Launch 360° Walk Navigation <ExternalLink className="w-3.5 h-3.5" />
-                </a>
-              </div>
-            )}
-          </div>
+              {viewAngle === 'street_pano' && (
+                <div className="text-center p-6 bg-black/70 backdrop-blur-md rounded-2xl border border-zinc-800 max-w-sm">
+                  <Building2 className="w-10 h-10 text-[#F39444] mx-auto mb-2" />
+                  <h4 className="font-bold text-white text-sm">Real-World Google Street View</h4>
+                  <p className="text-zinc-400 text-xs mt-1 mb-3">
+                    Delivering to {guide.buildingName} at ({lat.toFixed(4)}, {lng.toFixed(4)}).
+                  </p>
+                  <a
+                    href={googleDirectionsWalkUrl}
+                    target="_blank"
+                    rel="noreferrer noopener"
+                    className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-[#F39444] text-[#040505] text-xs font-bold"
+                  >
+                    Launch 360° Walk Navigation <ExternalLink className="w-3.5 h-3.5" />
+                  </a>
+                </div>
+              )}
+            </div>
+          )}
 
           {/* Bottom Stage Pill */}
-          <div className="z-10 flex items-center justify-between text-xs text-zinc-300 bg-black/60 backdrop-blur-md px-3 py-2 rounded-xl border border-zinc-800">
-            <div className="flex items-center gap-2">
-              <span className="w-2.5 h-2.5 rounded-full bg-emerald-400 animate-pulse"></span>
-              <span className="font-mono font-medium">Trolley & Lift Access Verified</span>
+          {viewAngle !== 'simplified_floorplan' && (
+            <div className="z-10 flex items-center justify-between text-xs text-zinc-300 bg-black/60 backdrop-blur-md px-3 py-2 rounded-xl border border-zinc-800">
+              <div className="flex items-center gap-2">
+                <span className="w-2.5 h-2.5 rounded-full bg-emerald-400 animate-pulse"></span>
+                <span className="font-mono font-medium">Trolley & Lift Access Verified</span>
+              </div>
+              <span className="text-[#F39444] font-semibold">{stop.title} • {stop.address.split(',')[1] || stop.address}</span>
             </div>
-            <span className="text-[#F39444] font-semibold">{stop.title} • {stop.address.split(',')[1] || stop.address}</span>
-          </div>
+          )}
         </div>
 
         {/* Step-by-Step Designated Walking Paths */}

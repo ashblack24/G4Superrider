@@ -3,7 +3,8 @@ import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
 import { RouteStop, MotorcycleParking, EVCharger, DeliveryOrder } from '../types';
 import { MOTORBIKE_SHORTCUTS } from '../data/singaporeData';
-import { Navigation } from 'lucide-react';
+import { Navigation, Building2 } from 'lucide-react';
+import { SimplifiedFloorplanMap } from './SimplifiedFloorplanMap';
 
 interface NavigationMapProps {
   currentLocation: [number, number];
@@ -21,7 +22,7 @@ interface NavigationMapProps {
   onOpenStreetView: (stop: RouteStop) => void;
 }
 
-type MapTheme = 'satellite' | 'dark' | 'standard';
+type MapTheme = 'satellite' | 'dark' | 'standard' | 'simplified';
 
 export const NavigationMap: React.FC<NavigationMapProps> = ({
   currentLocation,
@@ -42,7 +43,7 @@ export const NavigationMap: React.FC<NavigationMapProps> = ({
   const mapInstanceRef = useRef<L.Map | null>(null);
   const layerGroupRef = useRef<L.LayerGroup | null>(null);
   const tileLayersRef = useRef<L.Layer[]>([]);
-  const [mapTheme, setMapTheme] = useState<MapTheme>('satellite');
+  const [mapTheme, setMapTheme] = useState<MapTheme>('dark');
 
   // Initialize Map
   useEffect(() => {
@@ -109,12 +110,18 @@ export const NavigationMap: React.FC<NavigationMapProps> = ({
 
       tileLayersRef.current = [satBase, satRoads];
     } else if (mapTheme === 'dark') {
-      const darkLayer = L.tileLayer(
-        'https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png',
-        { maxZoom: 19, subdomains: 'abcd', className: 'map-tiles-dark' }
+      // ArcGIS World Dark Gray Base & Reference layers (100% watermark-free, no API key required)
+      const darkBase = L.tileLayer(
+        'https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Dark_Gray_Base/MapServer/tile/{z}/{y}/{x}',
+        { maxZoom: 19, className: 'map-tiles-dark-base' }
       ).addTo(map);
 
-      tileLayersRef.current = [darkLayer];
+      const darkRoads = L.tileLayer(
+        'https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Dark_Gray_Reference/MapServer/tile/{z}/{y}/{x}',
+        { maxZoom: 19, opacity: 0.9, className: 'map-tiles-dark-labels' }
+      ).addTo(map);
+
+      tileLayersRef.current = [darkBase, darkRoads];
     } else {
       const osmLayer = L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', {
         maxZoom: 19,
@@ -360,11 +367,37 @@ export const NavigationMap: React.FC<NavigationMapProps> = ({
 
   return (
     <div id="live-map-container" className="relative w-full h-full min-h-[480px]">
+      {/* Fullscreen Simplified Indoor Floorplan when theme is 'simplified' */}
+      {mapTheme === 'simplified' ? (
+        <div className="absolute inset-0 z-10">
+          <SimplifiedFloorplanMap
+            initialLevel="L4"
+            targetLevel="L5"
+            buildingName="Pavilion & Luxury Mall (CBD)"
+            orderNumber={orders[0]?.orderNumber || 'GF-8841'}
+            onClose={() => setMapTheme('dark')}
+          />
+        </div>
+      ) : null}
+
       <div ref={mapContainerRef} className="w-full h-full z-0" />
 
       {/* Floating Basemap Style Switcher (Top Right) */}
       <div className="absolute top-20 right-3 z-[400] flex flex-col gap-1.5 pointer-events-auto">
         <div className="bg-[#0e1015]/95 backdrop-blur-md p-1 rounded-xl border border-white/10 shadow-2xl flex flex-col gap-1">
+          <button
+            id="map-style-simplified-btn"
+            onClick={() => setMapTheme('simplified')}
+            title="Simplified Building Floorplan & Level Guide"
+            className={`px-2.5 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 ${
+              mapTheme === 'simplified'
+                ? 'bg-emerald-500 text-[#040505] shadow font-black'
+                : 'text-emerald-400 hover:text-emerald-300 hover:bg-white/5'
+            }`}
+          >
+            <span>🏢</span>
+            <span className="text-[11px]">Floorplan</span>
+          </button>
           <button
             id="map-style-satellite-btn"
             onClick={() => setMapTheme('satellite')}
@@ -407,14 +440,16 @@ export const NavigationMap: React.FC<NavigationMapProps> = ({
         </div>
 
         {/* Re-center on Rider Button */}
-        <button
-          id="recenter-rider-btn"
-          onClick={handleRecenter}
-          title="Center on GPS Location"
-          className="w-10 h-10 rounded-xl bg-[#0e1015]/95 backdrop-blur-md border border-white/10 text-[#F39444] hover:bg-[#F39444] hover:text-[#040505] flex items-center justify-center shadow-xl transition-all self-end active:scale-95"
-        >
-          <Navigation className="w-4 h-4" />
-        </button>
+        {mapTheme !== 'simplified' && (
+          <button
+            id="recenter-rider-btn"
+            onClick={handleRecenter}
+            title="Center on GPS Location"
+            className="w-10 h-10 rounded-xl bg-[#0e1015]/95 backdrop-blur-md border border-white/10 text-[#F39444] hover:bg-[#F39444] hover:text-[#040505] flex items-center justify-center shadow-xl transition-all self-end active:scale-95"
+          >
+            <Navigation className="w-4 h-4" />
+          </button>
+        )}
       </div>
     </div>
   );
