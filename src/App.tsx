@@ -76,6 +76,9 @@ export default function App() {
   // Active Waypoint Stop Index in the sequence
   const [activeStopIndex, setActiveStopIndex] = useState(0);
 
+  // Live LTA Data Status
+  const [ltaStatus, setLtaStatus] = useState<'live' | 'local'>('local');
+
   // Notification Banner
   const [toastMessage, setToastMessage] = useState<string | null>(
     '⚡ Motorbike Shortcuts Active: Saving ~15 mins across 3 CBD deliveries'
@@ -86,6 +89,12 @@ export default function App() {
     async function loadData() {
       const pkResult = await fetchMotorcycleParking(credentials);
       setParkingSpots(pkResult.data);
+      if (pkResult.source === 'live_lta') {
+        setLtaStatus('live');
+        setToastMessage('Live LTA DataMall connected: real-time carpark lots active');
+      } else {
+        setLtaStatus('local');
+      }
 
       const evResult = await fetchEVChargers(credentials);
       setEvChargers(evResult.data);
@@ -233,9 +242,9 @@ export default function App() {
                     SG CBD
                   </span>
                 </div>
-                <div className="text-[10px] text-zinc-400 font-mono flex items-center gap-1">
-                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse"></span>
-                  <span>Shortcuts Active</span>
+                <div className="text-[10px] text-zinc-400 font-mono flex items-center gap-1.5">
+                  <span className={`w-1.5 h-1.5 rounded-full ${ltaStatus === 'live' ? 'bg-emerald-400 animate-pulse' : 'bg-[#F39444]'}`}></span>
+                  <span>{ltaStatus === 'live' ? 'LTA Live (Vercel)' : 'Shortcuts Active'}</span>
                 </div>
               </div>
             </div>
@@ -371,18 +380,6 @@ export default function App() {
             handleOpenStreetView(stop);
           }}
         />
-
-        {/* Floating Recenter / GPS Button */}
-        <button
-          onClick={() => {
-            setCurrentLocation(SINGAPORE_DEFAULT_CENTER);
-            setToastMessage('GPS Re-centered on Singapore Downtown Hub');
-          }}
-          title="Recenter Map to Singapore Location"
-          className="absolute right-4 bottom-[300px] z-10 w-11 h-11 rounded-2xl bg-zinc-900/90 border border-zinc-800 text-[#F39444] flex items-center justify-center shadow-2xl backdrop-blur-md hover:bg-zinc-800 transition-colors"
-        >
-          <LocateFixed className="w-5 h-5" />
-        </button>
       </main>
 
       {/* Bottom Sheet: Route Waypoints, Active Delivery, and Guardrails */}

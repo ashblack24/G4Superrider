@@ -35,22 +35,30 @@ export const ApiConfigModal: React.FC<ApiConfigModalProps> = ({
 
   const handleTestConnection = async () => {
     setTestStatus('testing');
-    setTestMessage('Verifying OneMap, LTA DataMall, and AAAS endpoints...');
+    setTestMessage('Testing /api/lta serverless endpoint & external credentials...');
 
     try {
-      // Simulate real-world ping to check keys or validate format
-      await new Promise((res) => setTimeout(res, 800));
+      const headers: Record<string, string> = { accept: 'application/json' };
+      if (creds.ltaAccountKey) {
+        headers['AccountKey'] = creds.ltaAccountKey;
+      }
 
-      if (creds.oneMapToken || creds.ltaAccountKey || creds.aaasApiKey) {
+      const res = await fetch('/api/lta?service=CarParkAvailabilityv2', { headers });
+      const data = await res.json();
+
+      if (data.value && Array.isArray(data.value) && data.value.length > 0) {
         setTestStatus('success');
-        setTestMessage('API credentials stored and ready for live query dispatch.');
+        setTestMessage(`Success! Connected to LTA DataMall via /api/lta. Found ${data.value.length} real-time parking records.`);
+      } else if (data.status === 'warning') {
+        setTestStatus('warning');
+        setTestMessage(data.message || 'No LTA API Key detected in environment. Local verified Singapore data active.');
       } else {
         setTestStatus('warning');
-        setTestMessage('No external keys entered. Singapore offline CBD dataset actively serving as fallback.');
+        setTestMessage('LTA endpoint returned empty records. Fallback Singapore dataset active.');
       }
     } catch (e: any) {
       setTestStatus('warning');
-      setTestMessage('Could not reach remote gateway. Mock data fallback remains fully active.');
+      setTestMessage('Unable to reach /api/lta. Fallback verified Singapore CBD dataset is active.');
     }
   };
 
@@ -159,7 +167,15 @@ export const ApiConfigModal: React.FC<ApiConfigModalProps> = ({
               onChange={(e) => setCreds({ ...creds, ltaAccountKey: e.target.value })}
               className="w-full bg-zinc-900 border border-zinc-800 rounded-xl px-3.5 py-2.5 text-zinc-200 focus:outline-none focus:border-[#F39444] font-mono text-xs"
             />
-            <p className="text-[11px] text-zinc-500">Live feeds for Singapore carpark availability, ERP gantries, and road closures.</p>
+            <p className="text-[11px] text-zinc-500">Live feeds for Singapore motorcycle parking availability, ERP gantries, and road closures.</p>
+            
+            {/* Vercel Environment Variable Notice */}
+            <div className="p-2.5 rounded-xl bg-zinc-900/90 border border-emerald-500/30 text-[11px] text-zinc-300 flex items-start gap-2 mt-2">
+              <span className="text-emerald-400 font-bold">▲ Vercel:</span>
+              <span>
+                You can also configure <code className="bg-black px-1.5 py-0.5 rounded text-emerald-300 font-mono text-[10px]">LTA_API_KEY</code> or <code className="bg-black px-1.5 py-0.5 rounded text-emerald-300 font-mono text-[10px]">VITE_LTA_API_KEY</code> directly in your <strong>Vercel Project Settings → Environment Variables</strong>. The app's <code className="bg-black px-1.5 py-0.5 rounded text-[#F39444] font-mono text-[10px]">/api/lta</code> serverless function will auto-consume it with full CORS support!
+              </span>
+            </div>
           </div>
 
           {/* Custom AAAS Live API */}

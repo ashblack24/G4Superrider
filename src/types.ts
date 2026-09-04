@@ -94,3 +94,11 @@ export interface ApiCredentials {
   aaasApiKey: string;
   useMockData: boolean;
 }
+
+export interface LtaTrafficIncident {
+  id: string;
+  type: string;
+  message: string;
+  coords: [number, number];
+}
+

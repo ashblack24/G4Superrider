@@ -1,7 +1,9 @@
-import React, { useEffect, useRef } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import L from 'leaflet';
+import 'leaflet/dist/leaflet.css';
 import { RouteStop, MotorcycleParking, EVCharger, DeliveryOrder } from '../types';
 import { MOTORBIKE_SHORTCUTS } from '../data/singaporeData';
+import { Navigation } from 'lucide-react';
 
 interface NavigationMapProps {
   currentLocation: [number, number];
@@ -18,6 +20,8 @@ interface NavigationMapProps {
   onSelectStop: (stop: RouteStop, index: number) => void;
   onOpenStreetView: (stop: RouteStop) => void;
 }
+
+type MapTheme = 'satellite' | 'dark' | 'standard';
 
 export const NavigationMap: React.FC<NavigationMapProps> = ({
   currentLocation,
@@ -37,23 +41,19 @@ export const NavigationMap: React.FC<NavigationMapProps> = ({
   const mapContainerRef = useRef<HTMLDivElement>(null);
   const mapInstanceRef = useRef<L.Map | null>(null);
   const layerGroupRef = useRef<L.LayerGroup | null>(null);
+  const tileLayersRef = useRef<L.Layer[]>([]);
+  const [mapTheme, setMapTheme] = useState<MapTheme>('satellite');
 
   // Initialize Map
   useEffect(() => {
     if (!mapContainerRef.current || mapInstanceRef.current) return;
 
-    // Dark sleek CartoDB / OSM tiles tailored for high contrast
     const map = L.map(mapContainerRef.current, {
       center: currentLocation,
       zoom: 14,
       zoomControl: false,
       attributionControl: false,
     });
-
-    L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
-      maxZoom: 19,
-      subdomains: 'abcd',
-    }).addTo(map);
 
     // Reposition zoom controls to bottom-right for clean mobile thumb access
     L.control.zoom({ position: 'bottomright' }).addTo(map);
@@ -62,11 +62,69 @@ export const NavigationMap: React.FC<NavigationMapProps> = ({
     mapInstanceRef.current = map;
     layerGroupRef.current = layerGroup;
 
+    // Force tile recalculation on load and layout changes
+    setTimeout(() => {
+      map.invalidateSize();
+    }, 100);
+    setTimeout(() => {
+      map.invalidateSize();
+    }, 400);
+
+    const resizeObserver = new ResizeObserver(() => {
+      map.invalidateSize();
+    });
+    if (mapContainerRef.current) {
+      resizeObserver.observe(mapContainerRef.current);
+    }
+
     return () => {
+      resizeObserver.disconnect();
       map.remove();
       mapInstanceRef.current = null;
     };
   }, []);
+
+  // Update Base Tile Layers based on Theme
+  useEffect(() => {
+    const map = mapInstanceRef.current;
+    if (!map) return;
+
+    tileLayersRef.current.forEach((layer) => {
+      if (map.hasLayer(layer)) {
+        map.removeLayer(layer);
+      }
+    });
+    tileLayersRef.current = [];
+
+    if (mapTheme === 'satellite') {
+      const satBase = L.tileLayer(
+        'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',
+        { maxZoom: 19, className: 'map-tiles-satellite' }
+      ).addTo(map);
+
+      const satRoads = L.tileLayer(
+        'https://services.arcgisonline.com/ArcGIS/rest/services/Reference/World_Transportation/MapServer/tile/{z}/{y}/{x}',
+        { maxZoom: 19, opacity: 0.85 }
+      ).addTo(map);
+
+      tileLayersRef.current = [satBase, satRoads];
+    } else if (mapTheme === 'dark') {
+      const darkLayer = L.tileLayer(
+        'https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png',
+        { maxZoom: 19, subdomains: 'abcd', className: 'map-tiles-dark' }
+      ).addTo(map);
+
+      tileLayersRef.current = [darkLayer];
+    } else {
+      const osmLayer = L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', {
+        maxZoom: 19,
+      }).addTo(map);
+
+      tileLayersRef.current = [osmLayer];
+    }
+
+    map.invalidateSize();
+  }, [mapTheme]);
 
   // Render Dynamic Layers & Routes
   useEffect(() => {
@@ -294,9 +352,70 @@ export const NavigationMap: React.FC<NavigationMapProps> = ({
     }
   }, [currentLocation, stops, activeStopIndex, showParking, showEV, showShortcutsOnly, parkingSpots, evChargers]);
 
+  const handleRecenter = () => {
+    if (mapInstanceRef.current) {
+      mapInstanceRef.current.flyTo(currentLocation, 15, { duration: 0.8 });
+    }
+  };
+
   return (
     <div id="live-map-container" className="relative w-full h-full min-h-[480px]">
       <div ref={mapContainerRef} className="w-full h-full z-0" />
+
+      {/* Floating Basemap Style Switcher (Top Right) */}
+      <div className="absolute top-20 right-3 z-[400] flex flex-col gap-1.5 pointer-events-auto">
+        <div className="bg-[#0e1015]/95 backdrop-blur-md p-1 rounded-xl border border-white/10 shadow-2xl flex flex-col gap-1">
+          <button
+            id="map-style-satellite-btn"
+            onClick={() => setMapTheme('satellite')}
+            title="Satellite Imagery"
+            className={`px-2.5 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 ${
+              mapTheme === 'satellite'
+                ? 'bg-[#F39444] text-[#040505] shadow'
+                : 'text-zinc-400 hover:text-white hover:bg-white/5'
+            }`}
+          >
+            <span>🛰️</span>
+            <span className="text-[11px]">Satellite</span>
+          </button>
+          <button
+            id="map-style-dark-btn"
+            onClick={() => setMapTheme('dark')}
+            title="Dark Matter Map"
+            className={`px-2.5 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 ${
+              mapTheme === 'dark'
+                ? 'bg-[#F39444] text-[#040505] shadow'
+                : 'text-zinc-400 hover:text-white hover:bg-white/5'
+            }`}
+          >
+            <span>🌙</span>
+            <span className="text-[11px]">Dark</span>
+          </button>
+          <button
+            id="map-style-standard-btn"
+            onClick={() => setMapTheme('standard')}
+            title="Street Map"
+            className={`px-2.5 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 ${
+              mapTheme === 'standard'
+                ? 'bg-[#F39444] text-[#040505] shadow'
+                : 'text-zinc-400 hover:text-white hover:bg-white/5'
+            }`}
+          >
+            <span>🗺️</span>
+            <span className="text-[11px]">Street</span>
+          </button>
+        </div>
+
+        {/* Re-center on Rider Button */}
+        <button
+          id="recenter-rider-btn"
+          onClick={handleRecenter}
+          title="Center on GPS Location"
+          className="w-10 h-10 rounded-xl bg-[#0e1015]/95 backdrop-blur-md border border-white/10 text-[#F39444] hover:bg-[#F39444] hover:text-[#040505] flex items-center justify-center shadow-xl transition-all self-end active:scale-95"
+        >
+          <Navigation className="w-4 h-4" />
+        </button>
+      </div>
     </div>
   );
 };
